@@ -1,12 +1,52 @@
-﻿using System;
+﻿using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Http;
+using Serilog;
+using Serilog.Extensions.Logging;
+using System;
+using System.IO;
+using System.Threading.Tasks;
+using Commands;
 
 namespace ConsoleGUI
 {
     class Program
     {
-        static void Main(string[] args)
+        private static async Task<int> Main(string[] args)
         {
-            Console.WriteLine("Hello World!");
+            var Configuration = new ConfigurationBuilder()
+                .SetBasePath(Directory.GetCurrentDirectory())
+                .AddJsonFile(AppDomain.CurrentDomain.BaseDirectory + "\\appsettings.json", optional: true, reloadOnChange: true)
+                .AddEnvironmentVariables()
+                .Build();
+
+            Log.Logger = new LoggerConfiguration()
+                   .ReadFrom.Configuration(Configuration)
+                   .Enrich.FromLogContext()
+                   .CreateLogger();
+
+            var builder = new HostBuilder()
+                .ConfigureServices((hostContext, services) =>
+                {
+                    services.AddLogging(config =>
+                    {
+                        config.ClearProviders();
+                        config.AddProvider(new SerilogLoggerProvider(Log.Logger));
+                    });
+                    services.AddHttpClient();
+                });
+
+            try
+            {
+                return await builder.RunCommandLineApplicationAsync<KwSCmd>(args);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+                return 1;
+            }
         }
     }
 }
